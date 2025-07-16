@@ -1,13 +1,17 @@
 # ShapeX
 
-Create scalable event-driven applications with ShapeX, inspired by [re-frame](https://github.com/day8/re-frame/). ShapeX uses zero dependencies and is runtime agnostic, meaning that you can use it in Node, Deno, Bun, browsers, or really anywhere where JavaScript runs.
+Create scalable event-driven applications with ShapeX, inspired by [re-frame](https://github.com/day8/re-frame/). ShapeX
+uses zero dependencies and is runtime agnostic, meaning that you can use it in Node, Deno, Bun, browsers, or really
+anywhere where JavaScript runs.
 
 ## Example application
 
-This is an example application that demonstrates how to use the ShapeX library. It has a single starting point event called `request`, which returns an updated state, which changes the `counter`. When that state changes, the subscriber for the `counter` state fires.
+This is an example application that demonstrates how to use the ShapeX library. It has a single starting point event
+called `request`, which returns an updated state, which changes the `counter`. When that state changes, the subscriber
+for the `counter` state fires.
 
 ```typescript
-import { ShapeX } from "shapex";
+import {ShapeX} from "shapex";
 
 type AppState = {
   counter: number;
@@ -19,19 +23,13 @@ const app = ShapeX<AppState>({
 
 app.subscribe("$.counter", (state) => {
   console.log("counter changed", state);
-
-  return {
-    state,
-  };
 });
 
 app.subscribe("request", (state) => {
-  return {
-    state: {
-      ...state,
-      counter: state.counter + 1;
-    }
-  }
+  app.setState({
+    ...state,
+    counter: state.counter + 1
+  });
 });
 
 // Dispatch an event somewhere.
@@ -51,7 +49,7 @@ npm install shapex
 At the core of your application is state. You start by initiating ShapeX with some initial state, like so:
 
 ```typescript
-import { ShapeX } from "shapex";
+import {ShapeX} from "shapex";
 
 type AppState = {
   counter: number;
@@ -69,162 +67,85 @@ You can model your `AppState` however you like. It does not have to be called `A
 Events set things in motion. You can dispatch events like so:
 
 ```typescript
-app.dispatch("some-event-name");
+app.dispatch("some-topic-name");
 ```
 
-And, if there's a subscription for that event name, that subscription will then fire. The above example is a data-less event, but you can also dispatch events with data, like so:
+And, if there's any subscriptions for that topic, those subscriptions will then fire their event listeners.
+The above example is an event with no payload, but you can also dispatch events with payload, like so:
 
 ```typescript
-app.dispatch("some-event-name", {
+app.dispatch("some-topic-name", {
   hello: "world",
 });
 ```
 
 ### Subscriptions
 
-Subscriptions listen to events or changes to state. Each subscription must return a `SubscriptionResponse` object, which looks like this:
-
-```typescript
-{
-  state: T, // optional
-  dispatch: {
-    to: "event-to-dispatch",
-    with: {} // optional
-  } // optional
-}
-```
-
-You can also dispatch multiple events by passing an array of objects, like so:
-
-```typescript
-{
-  state: T,
-  dispatch: [{
-    to: "event-to-dispatch",
-    with: {}
-  },{
-    to: "another-event-to-dispatch",
-    with: {}
-  }]
-}
-```
-
-#### Event subscriptions
-
 You can listen to events like so:
 
 ```typescript
-app.subscribe("some-event-name", (state, data: <{hello: string}>) => {
-  return {
-    state,
-  };
+app.subscribe("some-event-name", (state, payload) => {
+  // do something with the payload
 });
 ```
 
-Each subscription has a callback function which gets passed to it the app state and whatever data was passed
-when the event was dispatched. Subscription callbacks must return an `Response` which consists of updated state and/or further event dispatches. If you don't want to update state, just return the same state that the callback got in the first place.
+Each subscription has a callback function (event listener) which gets passed to it the app state and whatever payload
+was passed when the event was dispatched. In other words, subscriptions take a `EventListener<TState, TPayload>`
+function where `TState` is the app state, `TPayload` is the data sent via the `dispatch` method.
 
 #### State change subscriptions
 
-You can also listen to state changes with subscriptions, which will fire when the listened state changes. You can listen to state changes like so:
+You can also listen to state changes with subscriptions, which will fire when the listened state changes. You can listen
+to state changes like so:
 
 ```typescript
 app.subscribe("$.counter", (state) => {
-  return {
-    state,
-  };
+  // state.counter changed
 });
 ```
 
-Notable difference here is the `$.` prefix in the subscription listener name, which tells ShapeX what state to look for. Here `$.counter` will look for the root-level `counter` key in state. To look for nested state, simply add a dot (`.`) followed by the key name, i.e: `$.counter.nestedKey`. Additionally, state change subscriptions do not get any additional data passed to them, only state.
+Notable difference here is the `$.` prefix in the subscription listener name, which tells ShapeX what state to look for.
+Here `$.counter` will look for the root-level `counter` key in state. To look for nested state, simply add a dot (`.`)
+followed by the key name, i.e: `$.counter.nestedKey`. Additionally, state change subscriptions do not get any additional
+data passed to them, only state, or in other words they are of `EventListener<TState>` type.
 
 #### Subscribe only once
 
-If you want to subscribe to an event or state change only once, you can use the `subscribeOnce` method. This method works similarly to `subscribe`, but it will automatically unsubscribe after the first event or state change.
+If you want to subscribe to an event or state change only once, you can use the `subscribeOnce` method. This method
+works similarly to `subscribe`, but it will automatically unsubscribe after the first event or state change.
 
 ```typescript
 app.subscribeOnce("$.counter", (state) => {
-  return {
-    state,
-  };
+  // This will run only once.
 });
 ```
 
 #### Unsubscribe
 
-If you want to unsubscribe from an event or state change, you can use the `unsubscribe` method. This method takes the event or state change name as its argument and removes the subscription.
+If you want to unsubscribe from an event or state change, you can use the `unsubscribe` method. This method takes the
+event or state change name as its argument and removes the subscription.
 
 ```typescript
-app.unsubscribe("counter++");
+app.unsubscribe("some-topic-name");
 ```
 
-#### Change state
+### Updating state
 
-You can change state by returning a new state object, like so:
-
-```typescript
-app.subscribe("counter++", (state) => {
-  return {
-    state: {
-      ...state,
-      counter: state.counter + 1,
-    },
-  };
-});
-```
-
-#### Dispatch events from subscriptions
-
-You can also dispatch events from within subscriptions, like so:
+You can update state with the `setState` method:
 
 ```typescript
 app.subscribe("counter++", (state) => {
-  return {
-    state: {
-      ...state,
-      counter: state.counter + 1,
-    },
-  };
-});
-
-app.subscribe("some-event-name", (state) => {
-  return {
-    state,
-    dispatch: {
-      to: "counter++",
-    },
-  };
+  app.setState({
+    ...state,
+    counter: state.counter + 1
+  });
 });
 ```
-
-Now if `some-event-name` is dispatched, it also dispatches `counter++`. You can also pass data along, like so:
-
-```typescript
-app.subscribe("counter-increase", (state, increase: number) => {
-  return {
-    state: {
-      ...state,
-      counter: state.counter + increase,
-    },
-  };
-});
-
-app.subscribe("some-event-name", (state) => {
-  return {
-    state,
-    dispatch: {
-      to: "counter-increase",
-      with: 5,
-    },
-  };
-});
-```
-
-So now if `some-event-name` is dispatched, it also dispatches `counter-increase` with an increase of 5.
 
 #### Get the subscription count
 
-If you want to get the number of subscriptions for a specific event or state change, you can use the `subscriptionCount` method. This method takes the event or state change name as its argument and returns the number of subscriptions.
+If you want to get the number of subscriptions for a specific event or state change, you can use the `subscriptionCount`
+method. This method takes the event or state change name as its argument and returns the number of subscriptions.
 
 ```typescript
 // State change subscriptions
@@ -236,7 +157,8 @@ app.subscriptionCount("some-event-name");
 
 #### Get all subscriptions
 
-If you want to get all subscriptions, you can use the `subscriptions` method. This method returns an array of all the subscription names.
+If you want to get all subscriptions, you can use the `subscriptions` method. This method returns an array of all the
+subscription names.
 
 ```typescript
 app.subscriptions();
@@ -244,7 +166,8 @@ app.subscriptions();
 
 #### Get current app state
 
-If you want to get the current state of the app, you can use the `state` method. This method returns the current state of the app.
+If you want to get the current state of the app, you can use the `state` method. This method returns the current state
+of the app.
 
 ```typescript
 app.state();

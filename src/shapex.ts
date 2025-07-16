@@ -1,78 +1,55 @@
 /**
- * Dispatches an event with a given name and passes on
- * given arguments to it.
- */
-export type SubscriptionResponseDispatch<W extends unknown = undefined> = {
-  to: string;
-  with?: W;
-};
-
-/**
- * A response of the subscription callback. Should return new state
- * if you want to update state, and/or optionally also any events you
- * might want to dispatch.
- */
-export type SubscriptionResponse<T, D extends unknown = undefined> = {
-  state?: T;
-  dispatch?:
-    | SubscriptionResponseDispatch<D>
-    | SubscriptionResponseDispatch<D>[];
-};
-
-const isSubscriptionResponseList = <W extends unknown = undefined>(
-  dispatch: SubscriptionResponseDispatch<W> | SubscriptionResponseDispatch<W>[],
-): dispatch is SubscriptionResponseDispatch<W>[] => Array.isArray(dispatch);
-
-/**
  * A callback passed to subscriptions, called when the event
  * that the subscription is listening to is called.
  */
-export type EventCallback<
-  T,
-  W extends unknown = undefined,
-  D extends unknown = undefined,
+export type EventListener<
+  TState,
+  TPayload extends unknown = undefined,
 > = (
-  state: T,
-  data?: W,
-) =>
-  | SubscriptionResponse<T, D>
-  | Promise<SubscriptionResponse<T, D>>
-  | void
-  | Promise<void>;
+  state: TState,
+  payload?: TPayload,
+) => void | Promise<void>;
 
 type Subscription<
-  T,
-  W extends unknown = undefined,
-  D extends unknown = undefined,
+  TState,
+  TPayload extends unknown = undefined,
 > = {
-  listener: string;
-  callback: EventCallback<T, W, D>;
+  callback: EventListener<TState, TPayload>;
   once: boolean;
 };
 
 /**
  * An instance of the ShapeX object.
  */
-export type ShapeXInstance<T> = {
+export type ShapeXInstance<TState> = {
   /**
    * Subscribe to an event.
+   *
+   * @param topic
+   * @param callback
    */
-  subscribe: <W extends unknown = undefined, D extends unknown = undefined>(
-    listener: string,
-    callback: EventCallback<T, W, D>,
+  subscribe: <TPayload extends unknown = undefined>(
+    topic: string,
+    callback: EventListener<TState, TPayload>,
   ) => number;
+
   /**
    * Subscribe to an event once.
+   *
+   * @param topic
+   * @param callback
    */
-  subscribeOnce: <W extends unknown = undefined, D extends unknown = undefined>(
-    listener: string,
-    callback: EventCallback<T, W, D>,
+  subscribeOnce: <TPayload extends unknown = undefined>(
+    topic: string,
+    callback: EventListener<TState, TPayload>,
   ) => number;
 
   /**
    * Unsubscribe from an event.
+   *
+   * @param topic
    */
-  unsubscribe: (listener: string) => void;
+  unsubscribe: (topic: string) => void;
 
   /**
    * Get the number of subscriptions for an event.
@@ -86,102 +63,109 @@ export type ShapeXInstance<T> = {
 
   /**
    * Dispatch an event.
+   *
+   * @param to
+   * @param payload
    */
-  dispatch: <W extends unknown>(to: string, withData?: W) => void;
+  dispatch: <TPayload extends unknown>(to: string, payload?: TPayload) => void;
 
   /**
    * Get the current state.
    */
-  state: () => T;
+  state: () => TState;
+
+  /**
+   * Update state.
+   *
+   * @param updatedState
+   */
+  setState: (updatedState: TState) => void;
 };
 
 /**
  * A function that creates an EventX object.
  *
- * @param {T extends object} initialState The initial application state.
+ * @param {TState extends object} initialState The initial application state.
  * @returns {ShapeXInstance} The ShapeX object.
  */
-export function ShapeX<T extends object>(initialState: T): ShapeXInstance<T> {
+export function ShapeX<TState extends object>(initialState: TState): ShapeXInstance<TState> {
   let _state = initialState;
-  const _subscriptions: Map<
-    string,
-    Array<Subscription<T, unknown, unknown>>
-  > = new Map();
-  let subscriptionId = 0;
+  let _subscriptionId = 0;
+  const _subscriptions: Map<string, Array<Subscription<TState, unknown>>> = new Map();
 
   /**
    * Subscribe to an event.
    *
-   * @param {string} listener
-   * @param {EventCallback} callback
+   * @param topic
+   * @param {EventListener} callback
    * @returns
    */
   const subscribe = <
-    W extends unknown = undefined,
-    D extends unknown = undefined,
+    TPayload extends unknown = undefined,
   >(
-    listener: string,
-    callback: EventCallback<T, W, D>,
+    topic: string,
+    callback: EventListener<TState, TPayload>,
   ): number => {
-    if (!_subscriptions.has(listener)) {
-      _subscriptions.set(listener, []);
+    // there are no listeners, set as empty array
+    if (!_subscriptions.has(topic)) {
+      _subscriptions.set(topic, []);
     }
 
-    const subscriptions = _subscriptions.get(listener);
-    if (subscriptions) {
-      subscriptions.push({
-        listener,
-        callback: callback as unknown as EventCallback<T, unknown, unknown>,
-        once: false,
-      });
-    }
+    // add a listener
+    _subscriptions.get(topic)?.push({
+      callback: callback as unknown as EventListener<TState, unknown>,
+      once: false,
+    });
 
-    return ++subscriptionId;
+    return ++_subscriptionId;
   };
 
   /**
    * Subscribe to an event, once.
    *
-   * @param {string} listener
-   * @param {EventCallback} callback
+   * @param {string} topic
+   * @param {EventListener} callback
    * @returns
    */
-  const subscribeOnce = <W extends unknown = undefined, D extends unknown = W>(
-    listener: string,
-    callback: EventCallback<T, W, D>,
+  const subscribeOnce = <TPayload extends unknown = undefined>(
+    topic: string,
+    callback: EventListener<TState, TPayload>,
   ): number => {
-    if (!_subscriptions.has(listener)) {
-      _subscriptions.set(listener, []);
+    // there are no listeners, set as empty array
+    if (!_subscriptions.has(topic)) {
+      _subscriptions.set(topic, []);
     }
 
-    const subscriptions = _subscriptions.get(listener);
-    if (subscriptions) {
-      subscriptions.push({
-        listener,
-        callback: callback as unknown as EventCallback<T, unknown, unknown>,
-        once: true,
-      });
-    }
+    // add a listener
+    _subscriptions.get(topic)?.push({
+      callback: callback as unknown as EventListener<TState, unknown>,
+      once: true,
+    });
 
-    return ++subscriptionId;
+    return ++_subscriptionId;
   };
 
-  const unsubscribe = (listener: string): void => {
-    if (_subscriptions.has(listener)) {
-      _subscriptions.delete(listener);
+  /**
+   * Removes all listeners for a topic.
+   *
+   * @param topic
+   */
+  const unsubscribe = (topic: string): void => {
+    if (_subscriptions.has(topic)) {
+      _subscriptions.delete(topic);
     }
   };
 
   /**
    * Composes a list of changes between two states.
    *
-   * @param {T extends object} oldState
-   * @param {T extends object} newState
+   * @param {TState extends object} oldState
+   * @param {TState extends object} newState
    * @returns {string[]} The list of changes as array of paths.
    */
-  const changedState = <T extends object>(
-    oldState: T,
-    newState: T,
+  const changedState = <TState extends object>(
+    oldState: TState,
+    newState: TState,
   ): string[] => {
     const paths = <R extends object>(
       state: R,
@@ -210,16 +194,16 @@ export function ShapeX<T extends object>(initialState: T): ShapeXInstance<T> {
       const newPaths = paths(newState, "$");
       const newPathKeys = newPaths.map((x) => x.path);
 
-      // All new paths
+      // all new paths
       const added = newPathKeys.filter((path) => !oldPathKeys.includes(path));
 
-      // All removed paths
+      // all removed paths
       const removed = oldPathKeys.filter((path) => !newPathKeys.includes(path));
 
-      // Paths that remained
+      // paths that remained
       const same = oldPathKeys.filter((path) => newPathKeys.includes(path));
 
-      // Paths that changed
+      // paths that changed
       const changed = same.filter((path) => {
         const oldValue = oldPaths.find((x) => x.path === path)?.value;
         const newValue = newPaths.find((x) => x.path === path)?.value;
@@ -233,94 +217,33 @@ export function ShapeX<T extends object>(initialState: T): ShapeXInstance<T> {
     return differ(oldState, newState);
   };
 
-  const dispatcher = (
-    response: SubscriptionResponse<T, unknown>,
-    subscription: Subscription<T, unknown, unknown>,
-    callbackCount: number,
-    remainingSubscriptions: Subscription<T, unknown, unknown>[],
-  ) => {
-    // Updates state, and checks for state changes, and if any changes present,
-    // fires a dispatch for all the state listeners (if there are any).
-    if (response?.state !== undefined) {
-      const changes = changedState(_state, response.state);
-      _state = response.state;
-
-      for (let i = 0; i < changes.length; i++) {
-        dispatch(changes[i]);
-      }
-    }
-
-    // Dispatches events
-    if (response?.dispatch !== undefined) {
-      if (isSubscriptionResponseList(response.dispatch)) {
-        for (const dispatchee of response.dispatch) {
-          if (dispatchee?.with) {
-            dispatch(dispatchee.to, dispatchee.with);
-          } else {
-            dispatch(dispatchee.to);
-          }
-        }
-      } else {
-        if (response.dispatch?.with) {
-          dispatch(response.dispatch.to, response.dispatch.with);
-        } else {
-          dispatch(response.dispatch.to);
-        }
-      }
-    }
-
-    callbackCount++;
-
-    if (!subscription.once) {
-      remainingSubscriptions.push(subscription);
-    }
-  };
-
   /**
    * Dispatches an event with the given name and arguments.
    *
    * @param {string} to The name of the event to dispatch.
-   * @param {unknown[]} withData The arguments to pass to the event listeners.
+   * @param payload
    * @returns {void}
    */
-  const dispatch = <W extends unknown = undefined>(
+  const dispatch = <TPayload extends unknown = undefined>(
     to: string,
-    withData?: W,
+    payload?: TPayload,
   ): void => {
     if (!_subscriptions.has(to)) return;
 
     const scopedSubscriptions = _subscriptions.get(to) ?? [];
-    const remainingSubscriptions = [] as Array<Subscription<T, unknown, unknown>>;
-    let callbackCount = 0;
+    const remainingSubscriptions = [] as Array<Subscription<TState, unknown>>;
 
     for (const subscription of scopedSubscriptions) {
-      const callback = subscription.callback as unknown as EventCallback<T, W, unknown>;
-      let response = withData ? callback(_state, withData) : callback(_state);
+      const callback = subscription.callback as unknown as EventListener<TState, TPayload>;
 
-      // Async response
-      if (response instanceof Promise) {
-        response.then((result) => {
-          if (!result) return;
-
-          dispatcher(
-            result,
-            subscription,
-            callbackCount,
-            remainingSubscriptions,
-          );
-        });
+      if (payload) {
+        callback(_state, payload);
+      } else {
+        callback(_state);
       }
 
-      // Sync response
-      else {
-        if (!response) return;
-
-        dispatcher(
-          response,
-          subscription,
-          callbackCount,
-          remainingSubscriptions,
-        );
+      if (!subscription.once) {
+        remainingSubscriptions.push(subscription);
       }
     }
 
@@ -355,9 +278,23 @@ export function ShapeX<T extends object>(initialState: T): ShapeXInstance<T> {
    *
    * @returns {} The current state.
    */
-  const state = (): T => {
+  const state = (): TState => {
     return _state;
   };
+
+  /**
+   * Updates state.
+   *
+   * @param updatedState updated state
+   */
+  const setState = (updatedState: TState): void => {
+    const changes = changedState(_state, updatedState);
+    _state = updatedState;
+
+    for (let i = 0; i < changes.length; i++) {
+      dispatch(changes[i]);
+    }
+  }
 
   return {
     subscribe,
@@ -367,5 +304,6 @@ export function ShapeX<T extends object>(initialState: T): ShapeXInstance<T> {
     subscriptions,
     dispatch,
     state,
+    setState,
   };
 }
