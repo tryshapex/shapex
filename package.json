@@ -1,6 +1,6 @@
 {
   "name": "shapex",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "description": "A scalable event-driven application framework.",
   "author": "Asko Nõmm <asko@nmm.ee> (https://nmm.ee)",
   "main": "dist/shapex.cjs",
